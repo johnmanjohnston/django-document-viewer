@@ -4,6 +4,7 @@ from django.http import FileResponse
 from django.http import Http404
 import requests
 import os
+import mammoth # .docx to html
 
 def download_file(url):
     local_filename = url.split('/')[-1]
@@ -25,15 +26,38 @@ def delete_local_file(fpath):
 
 def read(request, fpath):
     if download_file(fpath) == 0:
-        response = HttpResponse(f"<div>The file at {fpath} was not found; HTTP Response 404</div>")
+        httpres = HttpResponse(f"<div>The file at {fpath} was not found; HTTP Response 404</div>")
     else:
         local_filename = fpath.split('/')[-1]
 
         try:
-            response = FileResponse(open(local_filename, 'rb'), content_type='application/pdf')
+            ext = (local_filename.split(".")[len(local_filename.split(".")) - 1]).lower()
+
+            if ext == "docx":
+                with open("pdfreader/test.docx", "rb") as docx_file:
+                    result = mammoth.convert_to_html(docx_file)
+                    html = result.value 
+                    messages = result.messages 
+
+                    full_html = (
+                        '<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body>'
+                        + html
+                        + "</body></html>"
+                    )
+
+                    with open("test.html", "w", encoding="utf-8") as f:
+                        f.write(full_html)
+
+                    httpres = HttpResponse(full_html)
+
+            elif ext == "pdf":
+                httpres = FileResponse(open(local_filename, 'rb'), content_type='application/pdf')
+
         except FileNotFoundError:
-            response = HttpResponse(f"<div>The file at {fpath} was not found; HTTP Response 404</div>")
+            httpres = HttpResponse(f"<div>The file at {fpath} was not found; HTTP Response 404</div>")
+        except ValueError:
+            httpres = HttpResponse(f"<div>Invalid file extension</div>")
 
         delete_local_file(local_filename)
 
-    return response
+    return httpres
